@@ -1,0 +1,14 @@
+{
+  "name": "com.aoyon.sample",
+  "displayName": "Sample",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "description": "Sample",
+  "author": {
+    "name": "Ao_425",
+    "url": "https://github.com/Tliks"
+  },
+  "url": "https://github.com/Tliks/Sample",
+  "changelogUrl": "https://github.com/Tliks/Sample/blob/main/CHANGELOG.md",
+  "vpmDependencies": {}
+}
