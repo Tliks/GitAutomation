@@ -1,14 +1,14 @@
 {
-  "name": "com.aoyon.sample",
-  "displayName": "Sample",
+  "name": "com.aoyon.git-acutomation",
+  "displayName": "Git Automation",
   "version": "0.1.0",
   "unity": "2022.3",
-  "description": "Sample",
+  "description": "A tool for git.",
   "author": {
     "name": "Ao_425",
     "url": "https://github.com/Tliks"
   },
-  "url": "https://github.com/Tliks/Sample",
-  "changelogUrl": "https://github.com/Tliks/Sample/blob/main/CHANGELOG.md",
+  "url": "https://github.com/Tliks/GitAutomation",
+  "changelogUrl": "https://github.com/Tliks/GitAutomation/blob/main/CHANGELOG.md",
   "vpmDependencies": {}
 }

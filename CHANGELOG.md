@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.1.0] - 2024-12-27
+### Added
 - IPreprocessBuildWithReportを用いて非VRCSDK環境にも対応
 - コミット履歴の表示ウィンドウを追加
 - Restore機能を追加
@@ -18,14 +31,8 @@
 - デバッグログを改善
 - コミット前にアセットの更新及びシーンの保存を行うように変更
 
-### Deprecated
-
 ### Removed
 - ブランチ名の設定項目を削除
-
-### Fixed
-
-### Security
 
 ## [0.1.0-beta.2] - 2024-12-13
 ### Changed
