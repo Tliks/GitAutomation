@@ -13,6 +13,10 @@
 
 ### Security
 
+## [0.1.1] - 2024-12-27
+### Fixed
+- workingDirectoryの初期値
+
 ## [0.1.0] - 2024-12-27
 ### Added
 - IPreprocessBuildWithReportを用いて非VRCSDK環境にも対応
