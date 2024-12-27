@@ -62,9 +62,14 @@ namespace com.aoyon.git_automation
             _mainThreadId = Thread.CurrentThread.ManagedThreadId;
         }
 
+        public static bool IsMainThread()
+        {
+            return Thread.CurrentThread.ManagedThreadId == _mainThreadId;
+        }
+
         public static bool ExecuteOnMainThread(Func<bool> action)
         {
-            if (Thread.CurrentThread.ManagedThreadId == _mainThreadId)
+            if (IsMainThread())
             {
                 return action();
             }

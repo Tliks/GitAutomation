@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using UnityEditor;
 using UnityEngine;
 
 namespace com.aoyon.git_automation
 {
 
+    // Todo: 全体的にキモイ
     public static class ExecuteGitCommand
     {
         [SerializeField]
@@ -14,62 +16,103 @@ namespace com.aoyon.git_automation
 
         public async static Task<bool> CommitAndPushAsync(string commitMessage)
         {
-            return await Task.Run(() =>
-            {
-                return CommitAndPush(commitMessage);
-            });
-        }
-
-        public static bool CommitAndPush(string commitMessage, bool mainThread = false)
-        {
-            if (!Commit(commitMessage, mainThread)) {
+            if (!await CommitAsync(commitMessage)) {
                 return false;
             }
 
-            if (!Push(mainThread)) {
+            if (!await PushAsync()) {
                 return false;
             }
 
             return true;
         }
 
-        public static bool Commit(string commitMessage, bool mainThread = false)
+        public static bool CommitAndPush(string commitMessage)
         {
-            ThreadHelper.RefreshOnMainThread(true);
+            if (!Commit(commitMessage)) {
+                return false;
+            }
+
+            if (!Push()) {
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool Commit(string commitMessage)
+        {
+            return CommitImpl(commitMessage, false).Result;
+        }
+
+        public static async Task<bool> CommitAsync(string commitMessage)
+        {
+            return await CommitImpl(commitMessage, true);
+        }
+
+        private static async Task<bool> CommitImpl(string commitMessage, bool isAsync)
+        {
+            AssetDatabase.Refresh();
+            Utils.SaveScenesWithoutHook();
 
             var enableCommit = GitAutomationSettings.EnableAutoCommit;
 
             if (enableCommit)
             {
-                // addはメインスレッドにおける実行を保証する
-                if (!ExecuteGitCommandBase("add .", true))
+                // addは同期的な実行
+                if (!ExecuteGitCommandBase("add ."))
                 {
                     return false;
                 }
-                if (!ExecuteGitCommandBase($"commit -m \"{commitMessage}\"", mainThread))
-                {
-                    return false;
+
+                if (isAsync) {
+                    if (!await ExecuteGitCommandBaseAsync($"commit -m \"{commitMessage}\""))
+                    {
+                        return false;
+                    }
+                }
+                else {
+                    if (!ExecuteGitCommandBase($"commit -m \"{commitMessage}\""))
+                    {
+                        return false;
+                    }
                 }
             }
             return true;
         }
 
-        public static bool Push(bool mainThread = false)
+        public static bool Push()
+        {
+            return PushImpl(false).Result;
+        }
+
+        public static async Task<bool> PushAsync()
+        {
+            return await PushImpl(true);
+        }
+
+        private static async Task<bool> PushImpl(bool isAsync)
         {
             var enablePush = GitAutomationSettings.EnableAutoPush;
             var remoteName = GitAutomationSettings.RemoteName;
 
             if (enablePush)
             {
-                if (!ExecuteGitCommandBase($"push {remoteName} HEAD", mainThread))
-                {
-                    return false;
+                if (isAsync) {
+                    if (!await ExecuteGitCommandBaseAsync($"push {remoteName} HEAD"))
+                    {
+                        return false;
+                    }
+                }
+                else {
+                    if (!ExecuteGitCommandBase($"push {remoteName} HEAD"))
+                    {
+                        return false;
+                    }
                 }
             }
-
             return true;
         }
-
 
         public static (bool, List<Commit>) GetCommitLog()
         {
@@ -99,81 +142,82 @@ namespace com.aoyon.git_automation
 
         public static bool Restore(Commit src, Commit dst)
         {   
+            if (!ThreadHelper.IsMainThread()) {
+                throw new Exception();
+            }
+
             UnityEngine.Debug.Log($"Restoring was started");
 
-            // 全てメインスレッドで実行する
-            return ThreadHelper.ExecuteOnMainThread(() =>
-            {
-                string autoCommitMessage = $"Auto commit before restoring";
-                // nothing to commitでもfalseを返すのでハンドリングしない
-                _ = Commit(autoCommitMessage);
+            string autoCommitMessage = $"Auto commit before restoring";
+            // nothing to commitでもfalseを返すのでハンドリングしない
+            _ = Commit(autoCommitMessage);
 
-                using (new Utils.PreventAutoAssetRefreshScope())
-                {      
-                    try
+            using (new Utils.PreventAutoAssetRefreshScope())
+            {      
+                try
+                {
+                    if (!ExecuteGitCommandBase($"checkout {dst.Hash} -- ."))
                     {
-                        if (!ExecuteGitCommandBase($"checkout {dst.Hash} -- ."))
-                        {
-                            throw new Exception("failed to checkout");
-                        };
+                        throw new Exception("failed to checkout");
+                    };
 
-                        ThreadHelper.RefreshOnMainThread();
+                    AssetDatabase.Refresh();
 
-                        string revertCommitMessage = $"Restore to {dst.Hash}";
-                        // nothing to commitは想定しづらい上に、仮にその場合はRestore自体不要
-                        // よってこっちはハンドリング
-                        if (!Commit(revertCommitMessage))
-                        {
-                            throw new Exception("faile to commit restoreing");
-                        };
-
-                        // pushは一連の実行が成功した上で最後に行う
-                        // ブランチのズレを防ぐ
-                        if (!Push())
-                        {
-                            // pushの失敗はResetを呼び出すほどではない
-                            UnityEngine.Debug.LogWarning("failed to push");
-                        };
-
-                        UnityEngine.Debug.Log($"Restoring was successfully completed");
-                        return true;
-                    }
-                    catch (Exception ex)
+                    string revertCommitMessage = $"Restore to {dst.Hash}";
+                    // nothing to commitは想定しづらい上に、仮にその場合はRestore自体不要
+                    // よってこっちはハンドリング
+                    if (!Commit(revertCommitMessage))
                     {
-                        UnityEngine.Debug.LogError(ex);
+                        throw new Exception("faile to commit restoreing");
+                    };
 
-                        UnityEngine.Debug.LogError($"Restoring was was failed, trying to reset source commit.");
-                        if (!ExecuteGitCommandBase($"reset --hard {src.Hash}"))
-                        {
-                            UnityEngine.Debug.LogError($"failed to reset source commit.");
-                        };
+                    // pushは一連の実行が成功した上で最後に行う
+                    // ブランチのズレを防ぐ
+                    if (!Push())
+                    {
+                        // pushの失敗はResetを呼び出すほどではない
+                        UnityEngine.Debug.LogWarning("failed to push");
+                    };
 
-                        ThreadHelper.RefreshOnMainThread();
-                        UnityEngine.Debug.LogError($"Restoring was failed and reseting was succeed, see above");
-                        return false;
-                    }
+                    UnityEngine.Debug.Log($"Restoring was successfully completed");
+                    return true;
                 }
-            });
+                catch (Exception ex)
+                {
+                    UnityEngine.Debug.LogError(ex);
+
+                    UnityEngine.Debug.LogError($"Restoring was was failed, trying to reset source commit.");
+                    if (!ExecuteGitCommandBase($"reset --hard {src.Hash}"))
+                    {
+                        UnityEngine.Debug.LogError($"failed to reset source commit.");
+                    };
+
+                    AssetDatabase.Refresh();
+                    UnityEngine.Debug.LogError($"Restoring was failed and reseting was succeed, see above");
+                    return false;
+                }
+            }
         }
 
-        private static bool ExecuteGitCommandBase(string command, bool mainThread = false, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
+
+        private static async Task<bool> ExecuteGitCommandBaseAsync(string command, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
         {
-            if (processing)
-            {
+            return await ExecuteGitCommandBaseImpl(command, true, stdoutCallback, stderrCallback);
+        }
+
+        private static bool ExecuteGitCommandBase(string command, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
+        {
+            // awaitしていなのでResultを用いてもデッドロックしない
+            return ExecuteGitCommandBaseImpl(command, false, stdoutCallback, stderrCallback).Result;
+        }
+
+        private static async Task<bool> ExecuteGitCommandBaseImpl(string command, bool isAsync, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
+        {
+            if (processing) {
                 UnityEngine.Debug.Log($"Already Processing Git");
                 return false;
             }
 
-            if (mainThread) {
-                return ThreadHelper.ExecuteOnMainThread(() => ExecuteGitCommandBaseImpl(command, stdoutCallback, stderrCallback));
-            }
-            else {
-                return ExecuteGitCommandBaseImpl(command, stdoutCallback, stderrCallback);
-            }
-        }
-
-        private static bool ExecuteGitCommandBaseImpl(string command, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
-        {
             processing = true;
             bool success = false;
             try
@@ -181,7 +225,17 @@ namespace com.aoyon.git_automation
                 string workingDirectory = GitAutomationSettings.WorkingDirectory;
                 var startInfo = CreateStartInfo("git", workingDirectory);
 
-                ExecuteCommand(startInfo, command, stdoutCallback, stderrCallback);
+                if (isAsync)
+                {
+                    await Task.Run(() =>
+                    {
+                        ExecuteCommand(startInfo, command, stdoutCallback, stderrCallback);
+                    });
+                }
+                else
+                {
+                    ExecuteCommand(startInfo, command, stdoutCallback, stderrCallback);
+                }
 
                 success = true;
             }
