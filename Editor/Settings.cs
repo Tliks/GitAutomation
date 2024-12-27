@@ -25,7 +25,7 @@ namespace com.aoyon.git_automation
         [SerializeField]
         private string remoteName = "origin";
         [SerializeField]
-        private string workingDirectory = Path.GetFullPath(Application.dataPath);
+        private string workingDirectory = Directory.GetParent(Application.dataPath).FullName;
 
         private static void SetValue<T>(ref T field, T value)
         {
