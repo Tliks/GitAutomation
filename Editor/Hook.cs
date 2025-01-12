@@ -14,8 +14,7 @@ namespace com.aoyon.git_automation
     {
         public class OnScene
         {   
-            [SerializeField]
-            private static bool _isRegistered = false;
+            public static bool IsRegistered = false;
 
             [InitializeOnLoadMethod]
             private static void Init()
@@ -25,63 +24,66 @@ namespace com.aoyon.git_automation
 
             public static void Register()
             {
-                if (!_isRegistered)
+                if (!IsRegistered)
                 {
-                    EditorSceneManager.sceneSaved += OnSceneSaved;
-                    _isRegistered = true;
+                    EditorSceneManager.sceneSaved += Process;
+                    IsRegistered = true;
                 }
             }
 
             public static void UnRegister()
             {
-                if (_isRegistered)
+                if (IsRegistered)
                 {
-                    EditorSceneManager.sceneSaved -= OnSceneSaved;
-                    _isRegistered = false;
+                    EditorSceneManager.sceneSaved -= Process;
+                    IsRegistered = false;
                 }
             }
 
-            public static bool IsRegistered()
+            static async void Process(Scene scene)
             {
-                return _isRegistered;
+                if (GitAutomationSettings.EnableOnSceneSaved)
+                {
+                    string commitMessage = $"Auto commit on Scene Saved";
+                    _ = await ExecuteGitCommand.TryCommitAndPushAsync(commitMessage);
+                }
             }
         }
+
+        public class OnBuild
+#if GA_VRCSDK_BASE
+            : IVRCSDKBuildRequestedCallback
+#else
+            : IPreprocessBuildWithReport
+#endif
+        {
+            public int callbackOrder => -int.MaxValue;
 
 #if GA_VRCSDK_BASE
-        public class OnBuild : IVRCSDKBuildRequestedCallback
-        {   
-            public int callbackOrder => -int.MaxValue;
-
             public bool OnBuildRequested(VRCSDKRequestedBuildType requestedBuildType)
-            {   
-                OnBeforeBuild();
+            {
+                Process();
                 return true;
             }
-
-        }
 #else
-        public class OnBuild : IPreprocessBuildWithReport
-        {   
-            public int callbackOrder => -int.MaxValue;
-
             public void OnPreprocessBuild(BuildReport report)
             {
-                OnBeforeBuild();
+                Process();
             }
-        }
 #endif
 
-        private static void OnSceneSaved(Scene scene)
-        {
-            if (GitAutomationSettings.EnableOnSceneSaved)
+            static void Process()
             {
-                string commitMessage = $"Auto commit on Scene Saved";
-                _ = ExecuteGitCommand.CommitAndPushAsync(commitMessage);
+                if (GitAutomationSettings.EnableOnBuild)
+                {
+                    string commitMessage = $"Auto commit on Build";
+                    _ = ExecuteGitCommand.TryCommitAndPushAsync(commitMessage);
+                }
             }
         }
 
         private static void OnBeforeBuild()
-        {
+            {
             if (GitAutomationSettings.EnableOnBuild)
             {
                 string commitMessage = $"Auto commit on Build";

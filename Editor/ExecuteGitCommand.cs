@@ -11,46 +11,45 @@ namespace com.aoyon.git_automation
     // Todo: 全体的にキモイ
     public static class ExecuteGitCommand
     {
-        [SerializeField]
-        private static bool processing = false;
+        public static bool processing = false;
 
-        public async static Task<bool> CommitAndPushAsync(string commitMessage)
+        public async static Task<bool> TryCommitAndPushAsync(string commitMessage)
         {
-            if (!await CommitAsync(commitMessage)) {
+            if (!await TryCommitAsync(commitMessage)) {
                 return false;
             }
 
-            if (!await PushAsync()) {
-                return false;
-            }
-
-            return true;
-        }
-
-        public static bool CommitAndPush(string commitMessage)
-        {
-            if (!Commit(commitMessage)) {
-                return false;
-            }
-
-            if (!Push()) {
+            if (!await TryPushAsync()) {
                 return false;
             }
 
             return true;
         }
 
-        public static bool Commit(string commitMessage)
+        public static bool TryCommitAndPush(string commitMessage)
         {
-            return CommitImpl(commitMessage, false).Result;
+            if (!TryCommit(commitMessage)) {
+                return false;
+            }
+
+            if (!TryPush()) {
+                return false;
+            }
+
+            return true;
         }
 
-        public static async Task<bool> CommitAsync(string commitMessage)
+        public static bool TryCommit(string commitMessage)
         {
-            return await CommitImpl(commitMessage, true);
+            return TryCommitImpl(commitMessage, false).Result;
         }
 
-        private static async Task<bool> CommitImpl(string commitMessage, bool isAsync)
+        public static async Task<bool> TryCommitAsync(string commitMessage)
+        {
+            return await TryCommitImpl(commitMessage, true);
+        }
+
+        private static async Task<bool> TryCommitImpl(string commitMessage, bool isAsync)
         {
             AssetDatabase.Refresh();
             Utils.SaveScenesWithoutHook();
@@ -60,19 +59,19 @@ namespace com.aoyon.git_automation
             if (enableCommit)
             {
                 // addは同期的な実行
-                if (!ExecuteGitCommandBase("add ."))
+                if (!TryExecuteGitCommand("add ."))
                 {
                     return false;
                 }
 
                 if (isAsync) {
-                    if (!await ExecuteGitCommandBaseAsync($"commit -m \"{commitMessage}\""))
+                    if (!await TryExecuteGitCommandAsync($"commit -m \"{commitMessage}\""))
                     {
                         return false;
                     }
                 }
                 else {
-                    if (!ExecuteGitCommandBase($"commit -m \"{commitMessage}\""))
+                    if (!TryExecuteGitCommand($"commit -m \"{commitMessage}\""))
                     {
                         return false;
                     }
@@ -81,17 +80,17 @@ namespace com.aoyon.git_automation
             return true;
         }
 
-        public static bool Push()
+        public static bool TryPush()
         {
-            return PushImpl(false).Result;
+            return TryPushImpl(false).Result;
         }
 
-        public static async Task<bool> PushAsync()
+        public static async Task<bool> TryPushAsync()
         {
-            return await PushImpl(true);
+            return await TryPushImpl(true);
         }
 
-        private static async Task<bool> PushImpl(bool isAsync)
+        private static async Task<bool> TryPushImpl(bool isAsync)
         {
             var enablePush = GitAutomationSettings.EnableAutoPush;
             var remoteName = GitAutomationSettings.RemoteName;
@@ -99,13 +98,13 @@ namespace com.aoyon.git_automation
             if (enablePush)
             {
                 if (isAsync) {
-                    if (!await ExecuteGitCommandBaseAsync($"push {remoteName} HEAD"))
+                    if (!await TryExecuteGitCommandAsync($"push {remoteName} HEAD"))
                     {
                         return false;
                     }
                 }
                 else {
-                    if (!ExecuteGitCommandBase($"push {remoteName} HEAD"))
+                    if (!TryExecuteGitCommand($"push {remoteName} HEAD"))
                     {
                         return false;
                     }
@@ -114,11 +113,11 @@ namespace com.aoyon.git_automation
             return true;
         }
 
-        public static (bool, List<Commit>) GetCommitLog()
+        public static (bool, List<Commit>) TryGetCommitLog()
         {
             string command = $"log -n 300 --date=format:\"%Y-%m-%d %H:%M\" --pretty=format:\"%h___%ad___%s\"";
             List<Commit> commits = new();
-            bool result = ExecuteGitCommandBase(command, stdoutCallback: ReceiveCommits);
+            bool result = TryExecuteGitCommand(command, stdoutCallback: ReceiveCommits);
 
             return (result, commits);
 
@@ -140,7 +139,7 @@ namespace com.aoyon.git_automation
             }
         }
 
-        public static bool Restore(Commit src, Commit dst)
+        public static bool TryRestore(Commit src, Commit dst)
         {   
             if (!ThreadHelper.IsMainThread()) {
                 throw new Exception();
@@ -150,13 +149,13 @@ namespace com.aoyon.git_automation
 
             string autoCommitMessage = $"Auto commit before restoring";
             // nothing to commitでもfalseを返すのでハンドリングしない
-            _ = Commit(autoCommitMessage);
+            _ = TryCommit(autoCommitMessage);
 
             using (new Utils.PreventAutoAssetRefreshScope())
             {      
                 try
                 {
-                    if (!ExecuteGitCommandBase($"checkout {dst.Hash} -- ."))
+                    if (!TryExecuteGitCommand($"checkout {dst.Hash} -- ."))
                     {
                         throw new Exception("failed to checkout");
                     };
@@ -166,14 +165,14 @@ namespace com.aoyon.git_automation
                     string revertCommitMessage = $"Restore to {dst.Hash}";
                     // nothing to commitは想定しづらい上に、仮にその場合はRestore自体不要
                     // よってこっちはハンドリング
-                    if (!Commit(revertCommitMessage))
+                    if (!TryCommit(revertCommitMessage))
                     {
                         throw new Exception("faile to commit restoreing");
                     };
 
                     // pushは一連の実行が成功した上で最後に行う
                     // ブランチのズレを防ぐ
-                    if (!Push())
+                    if (!TryPush())
                     {
                         // pushの失敗はResetを呼び出すほどではない
                         UnityEngine.Debug.LogWarning("failed to push");
@@ -187,7 +186,7 @@ namespace com.aoyon.git_automation
                     UnityEngine.Debug.LogError(ex);
 
                     UnityEngine.Debug.LogError($"Restoring was was failed, trying to reset source commit.");
-                    if (!ExecuteGitCommandBase($"reset --hard {src.Hash}"))
+                    if (!TryExecuteGitCommand($"reset --hard {src.Hash}"))
                     {
                         UnityEngine.Debug.LogError($"failed to reset source commit.");
                     };
@@ -200,18 +199,18 @@ namespace com.aoyon.git_automation
         }
 
 
-        private static async Task<bool> ExecuteGitCommandBaseAsync(string command, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
+        private static async Task<bool> TryExecuteGitCommandAsync(string command, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
         {
-            return await ExecuteGitCommandBaseImpl(command, true, stdoutCallback, stderrCallback);
+            return await TryExecuteGitCommandImpl(command, true, stdoutCallback, stderrCallback);
         }
 
-        private static bool ExecuteGitCommandBase(string command, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
+        private static bool TryExecuteGitCommand(string command, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
         {
             // awaitしていなのでResultを用いてもデッドロックしない
-            return ExecuteGitCommandBaseImpl(command, false, stdoutCallback, stderrCallback).Result;
+            return TryExecuteGitCommandImpl(command, false, stdoutCallback, stderrCallback).Result;
         }
 
-        private static async Task<bool> ExecuteGitCommandBaseImpl(string command, bool isAsync, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
+        private static async Task<bool> TryExecuteGitCommandImpl(string command, bool isAsync, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
         {
             if (processing) {
                 UnityEngine.Debug.Log($"Already Processing Git");
@@ -222,19 +221,19 @@ namespace com.aoyon.git_automation
             bool success = false;
             try
             {
+                string fileName = "git";
                 string workingDirectory = GitAutomationSettings.WorkingDirectory;
-                var startInfo = CreateStartInfo("git", workingDirectory);
 
                 if (isAsync)
                 {
                     await Task.Run(() =>
                     {
-                        ExecuteCommand(startInfo, command, stdoutCallback, stderrCallback);
+                        ExecuteCommand(fileName, workingDirectory, command, stdoutCallback, stderrCallback);
                     });
                 }
                 else
                 {
-                    ExecuteCommand(startInfo, command, stdoutCallback, stderrCallback);
+                    ExecuteCommand(fileName, workingDirectory, command, stdoutCallback, stderrCallback);
                 }
 
                 success = true;
@@ -254,33 +253,28 @@ namespace com.aoyon.git_automation
             return success;
         }
 
-        private static ProcessStartInfo CreateStartInfo(string fileName, string workingDirectory)
+        private static void ExecuteCommand(string fileName, string workingDirectory, string command, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
         {
             ProcessStartInfo startInfo = new()
             {
                 FileName = fileName,
                 WorkingDirectory = workingDirectory,
+                Arguments = command,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            return startInfo;
-        }
-
-        private static void ExecuteCommand(ProcessStartInfo startInfo, string command, DataReceivedEventHandler stdoutCallback = null, DataReceivedEventHandler stderrCallback = null)
-        {
-            startInfo.Arguments = command;
             using (var process = new Process() { StartInfo = startInfo })
             {
                 process.OutputDataReceived += stdoutCallback ?? DefaultOutputDataReceived;
                 process.ErrorDataReceived += stderrCallback ?? DefaultErrorDataReceived;
 
                 process.Start();
-                UnityEngine.Debug.Log($"Excuted command: {command}");
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
+                UnityEngine.Debug.Log($"Excuted command ({fileName}): {command}");
 
                 // 終了まで同期的に待機
                 process.WaitForExit();

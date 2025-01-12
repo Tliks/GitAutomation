@@ -33,19 +33,34 @@ namespace com.aoyon.git_automation
             }
         }
 
+        public class PreventAutoSceneCommitScope : IDisposable
+        {   
+            [SerializeField]
+            private readonly bool _wasRegistered;
+
+            public PreventAutoSceneCommitScope()
+            {
+                _wasRegistered = Hook.OnScene.IsRegistered;
+                if (_wasRegistered)
+                {
+                    Hook.OnScene.UnRegister();
+                }
+            }
+
+            public void Dispose()
+            {
+                if (_wasRegistered)
+                {
+                    Hook.OnScene.Register();
+                }
+            }
+        }
+        
         public static void SaveScenesWithoutHook()
         {
-            bool wasRegistered = Hook.OnScene.IsRegistered();
-            if (wasRegistered)
+            using (new PreventAutoSceneCommitScope())
             {
-                Hook.OnScene.UnRegister();
-            }
-            
-            EditorSceneManager.SaveOpenScenes();
-            
-            if (wasRegistered)
-            {
-                Hook.OnScene.Register();
+                EditorSceneManager.SaveOpenScenes();
             }
         }
     }

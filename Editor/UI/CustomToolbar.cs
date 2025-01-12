@@ -38,7 +38,7 @@ namespace com.aoyon.git_automation
             commitButton.clicked += () =>
             {
                 string commitMessage = $"Manual commit";
-                _ = ExecuteGitCommand.CommitAndPushAsync(commitMessage);
+                _ = ExecuteGitCommand.TryCommitAndPushAsync(commitMessage);
             };
             commitButton.Add(new Image()
             {

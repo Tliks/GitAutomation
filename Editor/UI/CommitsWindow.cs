@@ -14,7 +14,7 @@ namespace com.aoyon.git_automation
         public static void ShowWindow()
         {
             var window = GetWindow<CommitsWindow>("Git Commits Log");
-            var result = ExecuteGitCommand.GetCommitLog();
+            var result = ExecuteGitCommand.TryGetCommitLog();
             window.commits = result.Item2;
         }
 
@@ -94,7 +94,7 @@ namespace com.aoyon.git_automation
                              $"Commit: {commit.Hash} {commit.Date} {commit.message}";
             if (EditorUtility.DisplayDialog("Confirm Restore", message, "OK", "Cancel"))
             {
-                ExecuteGitCommand.Restore(commits.First(), commit);
+                ExecuteGitCommand.TryRestore(commits.First(), commit);
                 Close();
             }
         }

@@ -14,7 +14,7 @@ namespace com.aoyon.git_automation
         public static void ManualExecution()
         {
             string commitMessage = $"Manual commit";
-            _ = ExecuteGitCommand.CommitAndPushAsync(commitMessage);
+            _ = ExecuteGitCommand.TryCommitAndPushAsync(commitMessage);
         }
 
         [MenuItem("Tools/Git Automation/Show Commit Log and Restore Window")]
